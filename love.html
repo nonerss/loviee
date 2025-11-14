@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bebe</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #fce7f3 0%, #fecdd3 50%, #fed7aa 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Floating hearts background */
+        .floating-hearts {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .heart {
+            position: absolute;
+            font-size: 20px;
+            opacity: 0.3;
+            animation: float-up 6s ease-in infinite;
+        }
+
+        @keyframes float-up {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0.3;
+            }
+
+            100% {
+                transform: translateY(-100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Draggable polaroid decorations */
+        .floating-polaroids {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            perspective: 1200px;
+        }
+
+        .floating-polaroid {
+            position: absolute;
+            width: 130px;
+            height: 150px;
+            background: white;
+            border: 3px solid #fef2f2;
+            padding: 5px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            animation: polaroid-float 6s ease-in-out infinite;
+            transform-style: preserve-3d;
+            cursor: grab;
+            pointer-events: auto;
+            transition: cursor 0.2s ease;
+            overflow: hidden;
+        }
+
+        .floating-polaroid img,
+        .floating-polaroid video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .floating-polaroid:hover {
+            cursor: grab;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+        }
+
+        .floating-polaroid:active {
+            cursor: grabbing;
+            z-index: 100;
+        }
+
+        @keyframes polaroid-float {
+
+            0%,
+            100% {
+                transform: translateY(0) rotateX(0) rotateY(0) rotateZ(var(--rotation));
+                opacity: 0.2;
+            }
+
+            50% {
+                transform: translateY(-30px) rotateX(5deg) rotateY(10deg) rotateZ(var(--rotation));
+                opacity: 0.4;
+            }
+        }
+
+        /* Main container */
+        .container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Book wrapper */
+        .book-wrapper {
+            width: 90%;
+            max-width: 900px;
+            height: 85vh;
+            perspective: 1000px;
+            position: relative;
+        }
+
+        .book {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            position: relative;
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.25);
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+        }
+
+        /* UPDATED: safer transforms for Firefox (prevents <video> collapsing) */
+        .page {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 40px 30px;
+            background: linear-gradient(135deg, #fffaf0 0%, #fff5ee 100%);
+            overflow-y: auto;
+
+            /* start off-screen to the right, no rotateY to avoid Firefox video render bug */
+            opacity: 0;
+            transform: translateX(100%);
+            transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55),
+                opacity 0.5s ease;
+            pointer-events: none;
+
+            /* rendering hints */
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+        }
+
+        /* Active page: bring to center (rotate only when active) */
+        .page.active {
+            opacity: 1;
+            transform: translateX(0) rotateY(0deg);
+            /* rotateY retained on final state only */
+            pointer-events: auto;
+            z-index: 2;
+        }
+
+        /* Previous page: move off-screen left (no rotateY) */
+        .page.prev {
+            transform: translateX(-100%);
+        }
+
+        /* Prevent <video> from collapsing during parent transforms/animations in Firefox */
+        /* Extra hints for video rendering in Firefox */
+        .page video {
+            display: block !important;
+            width: 100% !important;
+            max-width: 420px;
+            height: 100% !important;
+            min-height: 200px !important;
+            object-fit: cover !important;
+            background: #000;
+            border-radius: 8px;
+
+            /* Rendering hints */
+            will-change: transform, opacity;
+            transform: translateZ(0);
+            /* promote to its own layer */
+            contain: paint;
+            /* isolate painting/layout if supported */
+            backface-visibility: hidden;
+            -moz-backface-visibility: hidden;
+        }
+
+        /* A stronger min-size fallback on the container (so video has room) */
+        .photo-placeholder {
+            min-height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+
+        @media (max-width: 768px) {
+            .page {
+                padding: 30px 20px;
+            }
+        }
+
+        /* Page content styles */
+        .page h1 {
+            font-size: 2.5em;
+            color: #ec4899;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 700;
+            line-height: 1.2;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        .page h2 {
+            font-size: 1.8em;
+            color: #f472b6;
+            margin: 15px 0;
+            text-align: center;
+            font-weight: 600;
+            animation: fadeInDown 0.6s ease;
+        }
+
+        .page p {
+            font-size: 1.1em;
+            line-height: 1.8;
+            color: #6b7280;
+            margin: 15px 0;
+            text-align: center;
+            max-width: 600px;
+            animation: fadeInUp 0.8s ease;
+        }
+
+        .page-emoji {
+            font-size: 3.5em;
+            margin: 20px 0;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        /* Photo placeholder styling */
+        .photo-placeholder {
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+            border: 4px solid #f472b6;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            font-size: 0.95em;
+            color: #be185d;
+            text-align: center;
+            padding: 20px;
+            box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);
+            position: relative;
+            overflow: hidden;
+            transform: perspective(1000px) rotateY(-5deg) rotateX(3deg);
+            transition: transform 0.3s ease;
+        }
+
+        .photo-placeholder:hover {
+            transform: perspective(1000px) rotateY(0deg) rotateX(0deg) translateY(-5px);
+        }
+
+        .photo-placeholder::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
+            background-size: 20px 20px;
+            animation: drift 8s linear infinite;
+        }
+
+        @keyframes drift {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(20px, 20px);
+            }
+        }
+
+        /* Navigation */
+        .nav-buttons {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .nav-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #ec4899, #f472b6);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-btn:hover {
+            transform: scale(1.15);
+            box-shadow: 0 8px 25px rgba(236, 72, 153, 0.5);
+        }
+
+        .nav-btn:active {
+            transform: scale(0.92);
+        }
+
+        .page-indicator {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fbcfe8;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #ec4899;
+        }
+
+        .dot.active {
+            background: #ec4899;
+            width: 30px;
+            border-radius: 5px;
+        }
+
+        .dot:hover {
+            background: #f472b6;
+        }
+
+        /* Swipe indicator */
+        .swipe-hint {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(236, 72, 153, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            animation: fadeOut 5s ease-out forwards;
+            z-index: 15;
+            backdrop-filter: blur(5px);
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+            }
+
+            70% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+                visibility: hidden;
+            }
+        }
+
+        /* Love buttons */
+        .love-button-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin: 30px 0;
+            width: 100%;
+        }
+
+        .love-btn {
+            background: linear-gradient(135deg, #f472b6, #ec4899);
+            color: white;
+            border: none;
+            padding: 13px 24px;
+            border-radius: 28px;
+            font-size: 0.95em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 18px rgba(236, 72, 153, 0.35);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .love-btn:hover {
+            transform: scale(1.12);
+            box-shadow: 0 8px 25px rgba(236, 72, 153, 0.5);
+        }
+
+        .love-btn:active {
+            transform: scale(0.93);
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            animation: fadeInModal 0.3s ease;
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes fadeInModal {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #fff5ee 0%, #fffaf0 100%);
+            padding: 40px;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-content h2 {
+            color: #ec4899;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .modal-content p {
+            color: #6b7280;
+            line-height: 1.8;
+            margin: 15px 0;
+        }
+
+        .modal-image {
+            width: 100%;
+            max-width: 350px;
+            height: auto;
+            border-radius: 12px;
+            margin: 20px 0;
+            box-shadow: 0 10px 25px rgba(244, 114, 182, 0.2);
+        }
+
+        .close-btn {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ec4899;
+            cursor: pointer;
+            background: none;
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            transform: scale(1.2);
+            color: #f472b6;
+        }
+
+        /* Audio player */
+        .audio-player {
+            background: linear-gradient(135deg, #f472b6, #ec4899);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 6px 18px rgba(236, 72, 153, 0.35);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .audio-player label {
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .audio-player input[type="range"] {
+            width: 200px;
+            max-width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .audio-player input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .audio-player input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .audio-btn {
+            background: white;
+            color: #ec4899;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .audio-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Floating music player - Fixed on right side, stays visible */
+        .floating-music-player {
+            position: fixed;
+            right: 20px;
+            bottom: 120px;
+            background: linear-gradient(135deg, #f472b6, #ec4899);
+            color: white;
+            padding: 16px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(236, 72, 153, 0.4);
+            z-index: 999;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .floating-music-player .player-label {
+            font-weight: 700;
+            font-size: 0.95em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .floating-music-player audio {
+            width: 100%;
+            height: 32px;
+            border-radius: 8px;
+        }
+
+        .floating-music-player audio::-webkit-media-controls-panel {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .floating-music-player .player-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .floating-music-player .player-btn {
+            flex: 1;
+            background: white;
+            color: #ec4899;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s ease;
+        }
+
+        .floating-music-player .player-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .floating-music-player .player-btn:active {
+            transform: scale(0.95);
+        }
+
+        .player-minimize {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: white;
+            color: #ec4899;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .player-minimize:hover {
+            transform: scale(1.1);
+        }
+
+        .player-minimize:active {
+            transform: scale(0.9);
+        }
+
+        /* Minimized player button */
+        .floating-player-toggle {
+            position: fixed;
+            right: 20px;
+            bottom: 120px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #f472b6, #ec4899);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            transition: all 0.3s ease;
+            animation: slideInRight 0.5s ease-out;
+        }
+
+        .floating-player-toggle:hover {
+            transform: scale(1.15);
+            box-shadow: 0 8px 28px rgba(236, 72, 153, 0.5);
+        }
+
+        .floating-player-toggle:active {
+            transform: scale(0.92);
+        }
+
+        .floating-player-toggle.show {
+            display: flex;
+        }
+
+        @media (max-width: 768px) {
+            .floating-music-player {
+                right: 10px;
+                bottom: 110px;
+                min-width: 260px;
+                padding: 12px;
+            }
+
+            .floating-music-player .player-label {
+                font-size: 0.85em;
+            }
+
+            .floating-player-toggle {
+                right: 10px;
+                bottom: 110px;
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
+
+        /* Separator line */
+        .separator {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #f472b6, transparent);
+            margin: 20px 0;
+        }
+
+        /* Emoji scatter animation */
+        .emoji-scatter {
+            position: fixed;
+            pointer-events: none;
+            font-size: 32px;
+            animation: scatter 1s ease-out forwards;
+        }
+
+        @keyframes scatter {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(var(--tx), var(--ty)) scale(0);
+            }
+        }
+
+        /* Simple gallery styles - replaced Three.js gallery */
+        .gallery-container {
+            width: 100%;
+            max-width: 900px;
+            height: 65vh;
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+            margin-top: 20px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-slide {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-slide.active {
+            opacity: 1;
+        }
+
+        .gallery-slide img,
+        .gallery-slide video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .gallery-nav {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .gallery-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .gallery-dot.active {
+            background: white;
+            width: 30px;
+            border-radius: 6px;
+        }
+
+        .gallery-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.6);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .gallery-arrow:hover {
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .gallery-arrow.prev {
+            left: 10px;
+        }
+
+        .gallery-arrow.next {
+            right: 10px;
+        }
+
+        .gallery-info {
+            margin-top: 12px;
+            font-size: 0.95em;
+            color: #6b7280;
+        }
+
+        @media (max-width: 768px) {
+            .gallery-container {
+                height: 55vh;
+            }
+            
+            .gallery-arrow {
+                width: 35px;
+                height: 35px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="floating-hearts" id="floatingHeartsContainer"></div>
+    <!-- Draggable polaroid layer with pointer events enabled -->
+    <div class="floating-polaroids" id="floatingPolariods"></div>
+
+    <div class="container">
+        <div class="book-wrapper">
+            <div class="book">
+                <!-- Cover Page -->
+                <div class="page active">
+                    <div class="page-emoji">📖</div>
+                    <h1>Nag Kaon ka na lab?</h1>
+                    <div class="separator"></div>
+                    <p style="font-size: 1.3em; margin-top: 30px;">A story that started in the most unexpected place /
+                        Game</p>
+                    <p style="margin-top: 50px; font-style: italic;">Roblox?</p>
+                    <p style="margin-top: 50px; color: #f472b6; font-weight: 600; font-size: 1.15em; line-height: 1.8;">
+                        Eto na to Happy Wife, Happy Life💕</p>
+                    <div class="love-button-section" style="margin-top: 40px;">
+                        <button class="love-btn" onclick="showPopup('welcome')">Start Our Story ❤️</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 1: The Meeting -->
+                <div class="page">
+                    <h2>Plot Twist ng 2025 sa Roblox</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">🎮</div>
+                    <p>unexpected ngani isipin mo patulog na ako may makakakilala ako sa isang random Roblox game na
+                        nakita ko sa tiktok, andun lang sana para makinig nag bakasakali na mapapkinggan ko ung nakita
+                        ko sa tiktok kumanta dun</p>
+                    <p>Pero anghel naman na pakinggan ko. si billie eyelash pala to</p>
+                    <p>And then ayun na meet ka di ngalang ako maka salita kasi mag fefedback since lowbat nag chacharge
+                        ako at wala na akong ibang earphones kundi wired lang type c pa hahaha</p>
+                    <p>so ayun nag finding nemo aray ka sahhh hahaha</p>
+
+                    <img src="roblox2.png" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="roblox1.png" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="roblox3.jpg" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="roblox4.jpg" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="roblox5.jpg" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter1')">Love this memory 💕</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 2: Discord Era (video) -->
+                <div class="page">
+                    <h2>Jo? ano ba jo?</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">💬</div>
+                    <p>then at some time ayun nag ka bigayan ng contacts syempre discord walang personalan ganun kasi
+                        kalaro lang naman whatever happens kaibigan lang naman</p>
+                    <p>pero ayun nga kayanga plot twist hindi ba kasi ma huhulog pala ako dun bat kasi may butas at may
+                        huhulugan ako</p>
+                    <p>ikaw naman nakisabay ka pa jo? ano to gaya gaya lang sinakyan mo pa talaga, baby at loviee agad
+                        tawagan eh wala pa namang label after ng jo hahaha</p>
+                    <p>dapat sayo mahatulan ng cyber libel false ka its your false talaga</p>
+                    <p>after some time araw araw gabi gabi na tayong nag tatawagan hanggang sa ayun si discord na mismo
+                        sumusuko nag o-off nalang kung biglaan.</p>
+
+                    <!-- This page contains a video instead of an image -->
+                    <div class="photo-placeholder" style="padding:0;">
+                        <video src="discordcall1.mp4" controls muted loop playsinline poster="discordcall1.mp4"
+                            style="width:100%;height:100%;object-fit:cover;border-radius:8px;"></video>
+                    </div>
+                    <img src="discord1.jpg" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="discord2.jpg" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="discord3.jpg" alt="Our first meeting on Roblox" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter2')">Always reconnecting 💗</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 3: The Leap of Trust -->
+                <div class="page">
+                    <h2>Telegram kasi daw ngaaa...</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">🔐</div>
+                    <p>ayun na telegram ayaw ibigay instagram okaya fb ba kasi nga daw gusto manatili sa ganung
+                        situation</p>
+                    <p>Actually alam ko na lahat ng socials mo at that time you already knew narin naman where i got it
+                        from hahaha work related pa talaga</p>
+                    <p>at that time i was scared na mawala ka eh so i was really honest at my feelings at that time
+                        really di ko ma take ung mag sinungaling kasi i knew</p>
+                    <p>babalik sakin un in some other time, and yes i take the risk.</p>
+
+                    <img src="telegram1.jpg" alt="Our Telegram conversations" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter3')">Fell hard 💕</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 4: The Real Connection -->
+                <div class="page">
+                    <h2>Messenger — 24/7 leap of faith</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">💌</div>
+                    <p>imagine wala talaga dito talaga hantungan kasi pano ba naman no choice talaga</p>
+                    <p>pinilit kita since ayun nga solid kasi ung part na miss na kita aray ka talaga its your
+                        false(paalala lang ikaw ang nag sabi sakin na sumisi ng iba)</p>
+                    <p>and since di mo talaga plan na iopen ung main fb account from your social detox it became our
+                        sanctuary sa dump mo appow sanctuary daw ano un</p>
+                    <p>well di ko alam sa sarili ko mismo pero at that part i knew that you have taken the risk since i
+                        got the option to call you anytime, from there on</p>
+                    <p>i don't kung sa time na un na attach ka na sakin which is kung saan takot na takot ka mangyari
+                        since sa situation ko</p>
+                    <p>but yup this is where we started doing those 24hours calls grabe ba ldr ba naman kayo wala pa
+                        label sis.</p>
+
+                    <div class="photo-placeholder" style="padding:0;">
+                    <video src="sleep1.mp4" controls muted loop playsinline
+                            poster="/placeholder.svg?height=320&width=420"
+                            style="width:100%;height:100%;object-fit:cover;border-radius:8px;"></video>
+                    </div>
+                    <div class="photo-placeholder" style="padding:0;">
+                    <video src="busyplaying1.mp4" controls muted loop playsinline
+                            poster="/placeholder.svg?height=320&width=420"
+                            style="width:100%;height:100%;object-fit:cover;border-radius:8px;"></video>
+                    </div>
+                </div>
+
+                <!-- Chapter 5: Growing Closer (video) -->
+                <div class="page">
+                    <h2>Nesfruta? Real na real</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">📸</div>
+                    <p>First was tiktok, then we have like a personal convo na why not open your instagram ano lang
+                        naman un</p>
+                    <p>You slowly opened up about things—personal stuff, dreams, fears. Things na di mo basta binibigay
+                        sa kahit sino. And knowing you trusted me like that? Changed everything.</p>
+                    <p>Yeah, we argue sometimes. But hear me: Mahal kita. Always, Ano ba ako na to eh pereng tengee
+                        nemen</p>
+
+                    <!-- video here to show that pages can contain videos -->
+                    <div class="photo-placeholder" style="padding:0;">
+                        <video src="vidcall1.mp4" controls muted loop playsinline
+                            poster="/placeholder.svg?height=320&width=420"
+                            style="width:100%;height:100%;object-fit:cover;border-radius:8px;"></video>
+                    </div>
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter5')">Real love 💕💕💕</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 6: The Question -->
+                <div class="page">
+                    <h2>October 8 — OA talaga si overthinker</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">🤯</div>
+                    <p>October 8 ano uhm why not we take this seriously diba</p>
+                    <p>Kasi i mean,am really scared of losing you</p>
+                    <p>That moment? Not something, not maybe, not "di ko pala kaya mawala ka" official.</p>
+                    <p>From that day, you were mine. And I am yours. Genuinely. Happily. Tara na pwede na ikasal ba lala
+                        hahaha</p>
+
+                    <img src="where.PNG" alt="arugue" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="ambigat.PNG" alt="arugue" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="over na over talaga.PNG" alt="arugue" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="over.PNG" alt="arugue" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter6')">I LOVE YOU 💕💕💕</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 7: Our Arguments Are Love Letters -->
+                <div class="page">
+                    <h2>Arguments & Apologies</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">🤝</div>
+                    <p>But we're not perfect, and that's the point.</p>
+                    <p>We argue. We get frustrated. We have moments.</p>
+                    <p>But it's never to hurt. It's to understand. To grow closer. To become better "us."</p>
+                    <p>Every fight, every misunderstanding—it just tied us tighter o diba english na english syempre may
+                        gpt chariz</p>
+                    <p>pero alam mo naman na ung mga nangyari di ko na i lalagay pa dito since baka may iba pang
+                        makakita hahaha</p>
+                    <p>ang atin ay atin lang, ang akin ay akin lang👀</p>
+                    <p>i got no photos here really so this is after everything nalang</p>
+
+                    <img src="loveee.jpg" alt="We make it work through everything"
+                        class="modal-image" style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter7')">We make it work 💗</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 8: The Plan -->
+                <div class="page">
+                    <h2>Coming Soon</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">✈️</div>
+                    <p>i think you know what i mean here</p>
+                    <p>grabe ba naman sa layo natin sa isa't isa kala mo talaga ibang bansa eh no, afam?. hahaha</p>
+                    <p>but you know how excited i am i love you and your efforts for us to get closer together</p>
+                    <p>next time ako naman no promises but i will keep this in my mind my heart and soul chararan chararan</p>
+                    <p>ma hu-hugg mo na mee... love you "makukurot rin pala aray koo"</p>
+                    <p>di lang basta pa update update</p>
+
+                    <img src="kiss.gif" alt="aray ka saah" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="update1.jpg" alt="aray ka saah" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="update2.jpg" alt="aray ka saah" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="lovie.jpg" alt="aray ka saah" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <img src="lovieeee.jpg" alt="aray ka saah" class="modal-image"
+                        style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter8')">Can't wait 💕✨</button>
+                    </div>
+                </div>
+
+                <!-- Chapter 9: Right Now -->
+                <div class="page">
+                    <h2>Sahhh Tara nood?</h2>
+                    <div class="separator"></div>
+                    <div class="page-emoji">🌟</div>
+                    <p>kala mo naman eh no movie date, ayaw ni netflix mag share idaan sa ilegal charizz</p>
+                    <p>yup bonding bebe time kung iturin pero dito palang nanggigil na ako makasama ka "Ba't ba kasi
+                        anlayo moooo!!"</p>
+                    <p>honestly? These are the moments I'll treasure forever.</p>
+
+                    <img src="movie.png" alt="My favorite person and our moments"
+                        class="modal-image" style="margin: 20px 0; box-shadow: 0 15px 35px rgba(244, 114, 182, 0.25);">
+                    <div class="photo-placeholder" style="padding:0;">
+                        <video src="singing1.mp4" controls muted loop playsinline
+                            poster="/placeholder.svg?height=320&width=420"
+                            style="width:100%;height:100%;object-fit:cover;border-radius:8px;"></video>
+                    </div>
+
+                    <div class="love-button-section">
+                        <button class="love-btn" onclick="showPopup('chapter9')">My favorite person 💕</button>
+                    </div>
+                </div>
+
+                <!-- Final Message Page (kept) -->
+                <div class="page">
+                    <div class="page-emoji">💕</div>
+                    <h1 style="margin-top: 30px;">This Is Just The Beginning</h1>
+                    <div class="separator"></div>
+                    <p style="font-size: 1.2em; margin-top: 40px;">This whole thing started with zero expectations and
+                        everything to gain.</p>
+                    <p style="margin-top: 20px;">But now? This is my favorite story.</p>
+                    <p style="margin-top: 20px;">Your story. Our story. our show itss show time</p>
+                    <p>ay mali pala ano daw tawag dun</p>
+                    <p style="margin-top: 20px;">Best Part</p>
+
+                    <p style="margin-top: 50px; color: #f472b6; font-weight: 600; font-size: 1.05em; line-height: 2;">
+                        We're miles apart but my heart belongs with you.
+                        <br><br>
+                        You're my comfort zone.
+                        <br>
+                        My person.
+                        <br>
+                        My love.
+                        <br><br>
+                        No matter the distance, no matter what comes—
+                        <br>
+                        I'm here. I'm staying. With you.
+                        <br>
+                        For you. Always.
+                    </p>
+
+                    <div class="love-button-section" style="margin-top: 50px;">
+                        <button class="love-btn" onclick="showPopup('final')">I Love You Too 💕💕💕</button>
+                    </div>
+                </div>
+
+                <!-- NEW: Simple Gallery as the LAST PAGE -->
+                <div class="page">
+                    <h2>📸 Our Memories</h2>
+                    <div class="separator"></div>
+                    <p class="page-emoji">✨</p>
+                    <p style="margin-top: 10px; text-align:center; max-width:700px;">Click the arrows to navigate through our favorite moments together. 💕</p>
+
+                    <div class="gallery-container">
+                        <div class="gallery-wrapper" id="galleryWrapper">
+                            <!-- Simple carousel slides -->
+                            <div class="gallery-slide active">
+                                <img src="bebe1.jpg" alt="Memory 1">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="bebe2.jpg" alt="Memory 2">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="bebe3.jpg" alt="Memory 3">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="bebe4.jpg" alt="Memory 4">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="me1.jpg" alt="Memory 5">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="me2.jpg" alt="Memory 6">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="me3.jpg" alt="Memory 7">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="me4.jpg" alt="Memory 8">
+                            </div>
+                            <div class="gallery-slide">
+                                <img src="me5.jpg" alt="Memory 9">
+                            </div>
+                        </div>
+                        <button class="gallery-arrow prev" onclick="changeGallerySlide(-1)">❮</button>
+                        <button class="gallery-arrow next" onclick="changeGallerySlide(1)">❯</button>
+                        <div class="gallery-nav" id="galleryNav"></div>
+                    </div>
+                    <div class="gallery-info">Click arrows to navigate</div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating music player -->
+    <div class="floating-music-player" id="floatingPlayer">
+        <button class="player-minimize" onclick="minimizePlayer()">−</button>
+        <div class="player-label">🎵 Our Song</div>
+        <audio id="backgroundAudio" controls>
+            <source src="our-song.mp3" type="audio/mpeg">
+            Your browser does not support the audio element.
+        </audio>
+        <div class="player-controls">
+            <button class="player-btn" onclick="document.getElementById('backgroundAudio').pause()">⏸ Pause</button>
+            <button class="player-btn" onclick="document.getElementById('backgroundAudio').play()">▶ Play</button>
+        </div>
+    </div>
+
+    <!-- Toggle button for minimized player -->
+    <button class="floating-player-toggle" id="playerToggle" onclick="maximizePlayer()">🎵</button>
+
+    <!-- Navigation -->
+    <div class="nav-buttons">
+        <button class="nav-btn" onclick="previousPage()">❮</button>
+        <div class="page-indicator" id="pageIndicator"></div>
+        <button class="nav-btn" onclick="nextPage()">❯</button>
+    </div>
+
+    <!-- Modal popup system for button messages -->
+    <div id="popupModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closePopup()">&times;</button>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        const totalPages = 12;
+        let currentPage = 0;
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let draggedPolaroid = null;
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        let currentGallerySlide = 0;
+
+        // Get references to the new music player elements
+        let backgroundAudio = document.getElementById('backgroundAudio');
+        let floatingPlayer = document.getElementById('floatingPlayer');
+        let playerToggle = document.getElementById('playerToggle');
+
+        function createFloatingHearts() {
+            const container = document.getElementById('floatingHeartsContainer');
+            const hearts = ['❤️', '💕', '💗', '💖', '💝'];
+
+            for (let i = 0; i < 12; i++) {
+                const heart = document.createElement('div');
+                heart.className = 'heart';
+                heart.textContent = hearts[Math.floor(Math.random() * hearts.length)];
+                heart.style.left = Math.random() * 100 + '%';
+                heart.style.top = Math.random() * 100 + '%';
+                heart.style.animationDelay = Math.random() * 6 + 's';
+                heart.style.animationDuration = (5 + Math.random() * 3) + 's';
+                container.appendChild(heart);
+            }
+        }
+
+        function createFloatingPolaroids() {
+            const container = document.getElementById('floatingPolariods');
+            const mediaItems = [
+                { type: 'img', src: 'bebe1.jpg' },
+                { type: 'video', src: 'discordcall1.mp4', poster: '/placeholder.svg?height=100&width=80' },
+                { type: 'img', src: 'bebe4.jpg' },
+                { type: 'video', src: 'busyplaying1.mp4', poster: '/placeholder.svg?height=100&width=80' },
+                { type: 'img', src: 'me1.jpg' },
+                { type: 'img', src: 'roblox1.png' },
+                { type: 'video', src: 'vidcall1.mp4', poster: '/placeholder.svg?height=100&width=80' },
+                { type: 'img', src: 'me5.jpg' }
+            ];
+
+            mediaItems.forEach((item, i) => {
+                const polaroid = document.createElement('div');
+                polaroid.className = 'floating-polaroid';
+
+                if (item.type === 'video') {
+                    const vid = document.createElement('video');
+                    vid.src = item.src;
+                    if (item.poster) vid.poster = item.poster;
+                    vid.muted = true;
+                    vid.loop = true;
+                    vid.playsInline = true;
+                    polaroid.appendChild(vid);
+                    setTimeout(() => { try { vid.play(); } catch (e) { } }, 500);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = item.src;
+                    img.alt = 'Memory ' + (i + 1);
+                    polaroid.appendChild(img);
+                }
+
+                polaroid.style.left = Math.random() * 100 + '%';
+                polaroid.style.top = Math.random() * 100 + '%';
+                polaroid.style.animationDelay = (Math.random() * 6) + 's';
+                polaroid.style.animationDuration = (8 + Math.random() * 4) + 's';
+                polaroid.style.setProperty('--rotation', (Math.random() * 30 - 15) + 'deg');
+                container.appendChild(polaroid);
+
+                polaroid.addEventListener('mousedown', startDrag);
+                polaroid.addEventListener('touchstart', startDrag);
+            });
+        }
+
+        function startDrag(e) {
+            draggedPolaroid = this;
+            const rect = this.getBoundingClientRect();
+            offsetX = (e.clientX || e.touches[0].clientX) - rect.left;
+            offsetY = (e.clientY || e.touches[0].clientY) - rect.top;
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function drag(e) {
+            if (!draggedPolaroid) return;
+            const x = (e.clientX || e.touches[0].clientX) - offsetX;
+            const y = (e.clientY || e.touches[0].clientY) - offsetY;
+            draggedPolaroid.style.left = x + 'px';
+            draggedPolaroid.style.top = y + 'px';
+            draggedPolaroid.style.animation = 'none';
+            draggedPolaroid.style.filter = 'drop-shadow(0 8px 16px rgba(236, 72, 153, 0.4))';
+            const vid = draggedPolaroid.querySelector('video');
+            if (vid && !vid.paused) vid.pause();
+        }
+
+        function stopDrag() {
+            if (draggedPolaroid) {
+                const vid = draggedPolaroid.querySelector('video');
+                if (vid) try { vid.play(); } catch (e) { }
+                draggedPolaroid.style.filter = '';
+            }
+            draggedPolaroid = null;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('touchmove', drag);
+        }
+
+        // Initialize page indicator dots
+        function initializePageIndicator() {
+            const indicator = document.getElementById('pageIndicator');
+            indicator.innerHTML = '';
+
+            for (let i = 0; i < totalPages; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'dot' + (i === 0 ? ' active' : '');
+                dot.onclick = () => goToPage(i);
+                indicator.appendChild(dot);
+            }
+        }
+
+        function initializeGallery() {
+            const slides = document.querySelectorAll('.gallery-slide');
+            const nav = document.getElementById('galleryNav');
+            
+            slides.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'gallery-dot' + (index === 0 ? ' active' : '');
+                dot.onclick = () => goToGallerySlide(index);
+                nav.appendChild(dot);
+            });
+        }
+
+        function changeGallerySlide(direction) {
+            const slides = document.querySelectorAll('.gallery-slide');
+            slides[currentGallerySlide].classList.remove('active');
+            
+            currentGallerySlide += direction;
+            if (currentGallerySlide >= slides.length) currentGallerySlide = 0;
+            if (currentGallerySlide < 0) currentGallerySlide = slides.length - 1;
+            
+            slides[currentGallerySlide].classList.add('active');
+            updateGalleryDots();
+        }
+
+        function goToGallerySlide(index) {
+            const slides = document.querySelectorAll('.gallery-slide');
+            slides[currentGallerySlide].classList.remove('active');
+            currentGallerySlide = index;
+            slides[currentGallerySlide].classList.add('active');
+            updateGalleryDots();
+        }
+
+        function updateGalleryDots() {
+            const dots = document.querySelectorAll('.gallery-dot');
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentGallerySlide);
+            });
+        }
+
+        // Update page display
+        function updatePages() {
+            const pages = document.querySelectorAll('.page');
+            pages.forEach((page, index) => {
+                page.classList.remove('active', 'prev');
+
+                if (index === currentPage) {
+                    page.classList.add('active');
+                } else if (index < currentPage) {
+                    page.classList.add('prev');
+                }
+            });
+
+            // Update indicator dots
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentPage);
+            });
+
+            // Reflow for videos on active page
+            setTimeout(() => {
+                const activePage = document.querySelector('.page.active');
+                if (!activePage) return;
+
+                const vids = activePage.querySelectorAll('video');
+                vids.forEach(v => {
+                    try {
+                        v.style.display = 'none';
+                        void v.offsetHeight;
+                        v.style.display = '';
+                    } catch (err) { }
+
+                    try { v.load(); } catch (e) { }
+
+                    const wasMuted = v.muted;
+                    v.muted = true;
+                    v.play && v.play().then(() => {
+                        v.pause();
+                        v.muted = wasMuted;
+                    }).catch(() => {
+                        v.muted = wasMuted;
+                    });
+
+                    try {
+                        v.style.transform = 'translateZ(0)';
+                        setTimeout(() => { v.style.transform = ''; }, 250);
+                    } catch (e) { }
+                });
+            }, 80);
+        }
+
+        // Navigation functions
+        function nextPage() {
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+                updatePages();
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                updatePages();
+            }
+        }
+
+        function goToPage(index) {
+            currentPage = index;
+            updatePages();
+        }
+
+        // Music Player Controls
+        function toggleMusic() {
+            if (backgroundAudio.paused) {
+                backgroundAudio.play();
+            } else {
+                backgroundAudio.pause();
+            }
+        }
+
+        function minimizePlayer() {
+            const player = document.getElementById('floatingPlayer');
+            const toggle = document.getElementById('playerToggle');
+            player.style.display = 'none';
+            toggle.classList.add('show');
+        }
+
+        function maximizePlayer() {
+            const player = document.getElementById('floatingPlayer');
+            const toggle = document.getElementById('playerToggle');
+            player.style.display = 'flex';
+            toggle.classList.remove('show');
+        }
+
+        function showPopup(type) {
+            const modal = document.getElementById('popupModal');
+            const modalBody = document.getElementById('modalBody');
+
+            const popupData = {
+                welcome: {
+                    title: '❤️ Welcome to Our Shoow time chariz!',
+                    content: 'Swipe right to begin our journey together. This is just the start of something beautiful. Enjoy every moment! 💕',
+                },
+                chapter1: {
+                    title: '🎮 Roblox ngani',
+                    content: 'Who knew a random game would change everything? Roblox brought us together. It was just supposed to be fun and chill—but then you came along and made it so much more. ❤️',
+                },
+                chapter2: {
+                    title: '💬 Jo ano sabhin mo jo',
+                    content: 'Endless calls, random songs, comfortable silences—that was us on Discord. Every connection drop just made us want to reconnect more. Because losing you even for a second was never an option. 💗',
+                },
+                chapter3: {
+                    title: '🔐 Katakot ka sahh',
+                    content: 'ayaw pa kasi naman mag messenger grabe ba ung stay nalang tayo sa gantong situation un na yun?. 💕',
+                },
+                chapter4: {
+                    title: '💌 Sa wakas less stress messenger na',
+                    content: 'Messenger ano bale naging mas often na mag usap kasi mas accessive talaga other than the other socials tapos ayun sleep call na 24hours ba naman panong di mo gugustohin eh eto na yun ako na to eh 💗💗',
+                },
+                chapter5: {
+                    title: '📸 eh grabeng lovie ba naman yan',
+                    content: 'alam mo kung ano ano nalang talaga nilalagay ko dito kasi ba naman rami nating kwento diba nga baon natin limang piso lang noon umaakyat pa tayo ng bundok bundok noon maka pasok lang -- ay sa ibang kwento pala yan 💕💕',
+                },
+                chapter6: {
+                    title: '💍 October 8 o yan may singsing na dito',
+                    content: 'opo eto na trying hard di mag overthink hahaha love youu💕✨',
+                },
+                chapter7: {
+                    title: '🤝 aray ka isa ka sa day ones ko sah',
+                    content: 'Yeah, we argue. But every fight just makes us understand each other better. Love isn\'t perfect—it\'s messy, it\'s work, it\'s choosing each other over and over. And I choose you. Always. ❤️',
+                },
+                chapter8: {
+                    title: '✈️ la eh naka book na',
+                    content: 'Soon we\'ll be in the same room. Not screens, not calls—just us. I can\'t wait. Because you\'re not just my love, you\'re my home. 💕🌍',
+                },
+                chapter9: {
+                    title: '🌟 next time totoo na please',
+                    content: 'Movie dates, morning texts, random voice messages—these simple moments are everything. We\'re still writing our story, and every chapter with you is my favorite. 💕',
+                },
+                final: {
+                    title: '💕 Thank You',
+                    content: 'and i will be forever be greatful that i met you aray ka jan sige subukan mo umalis tapos na salita ko may bitaw to baka di mo alam HAHAHAHA. 💕💕💕',
+                }
+            };
+
+            const data = popupData[type] || popupData.welcome;
+
+            let content = `<h2>${data.title}</h2><p>${data.content}</p>`;
+
+            modalBody.innerHTML = content;
+            modal.classList.add('show');
+
+            scatterEmoji({ target: modal }, '💕');
+        }
+
+        function closePopup() {
+            const modal = document.getElementById('popupModal');
+            const audio = document.getElementById('audioPlayer');
+            if (audio) audio.pause();
+            modal.classList.remove('show');
+        }
+
+        // Scatter emoji animation
+        function scatterEmoji(e, emoji) {
+            const rect = e.target.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+
+            for (let i = 0; i < 8; i++) {
+                const scatterEmoji = document.createElement('div');
+                scatterEmoji.className = 'emoji-scatter';
+                scatterEmoji.textContent = emoji;
+                scatterEmoji.style.left = x + 'px';
+                scatterEmoji.style.top = y + 'px';
+
+                const angle = (i / 8) * Math.PI * 2;
+                const distance = 100;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+
+                scatterEmoji.style.setProperty('--tx', tx + 'px');
+                scatterEmoji.style.setProperty('--ty', ty + 'px');
+
+                document.body.appendChild(scatterEmoji);
+
+                setTimeout(() => scatterEmoji.remove(), 1000);
+            }
+
+            const originalSize = e.target.style.transform;
+            e.target.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                e.target.style.transform = originalSize;
+            }, 100);
+        }
+
+        // Touch swipe support
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const threshold = 50;
+
+            if (touchStartX - touchEndX > threshold) {
+                nextPage();
+            } else if (touchEndX - touchStartX > threshold) {
+                previousPage();
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextPage();
+            if (e.key === 'ArrowLeft') previousPage();
+        });
+
+        // Close modal on background click
+        document.getElementById('popupModal').addEventListener('click', (e) => {
+            if (e.target.id === 'popupModal') closePopup();
+        });
+
+        // Initialize
+        createFloatingHearts();
+        createFloatingPolaroids();
+        initializePageIndicator();
+        initializeGallery();
+        updatePages();
+
+        // Show swipe hint
+        setTimeout(() => {
+            const hint = document.createElement('div');
+            hint.className = 'swipe-hint';
+            hint.textContent = '👈 Swipe or use arrow keys to read 👉';
+            document.body.appendChild(hint);
+        }, 500);
+    </script>
+</body>
+
+</html>
